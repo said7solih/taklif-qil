@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tovushlar</title>
+<style>
+:root{--bg:#F6F1E8;--ink:#211C18;--line:#E2D8C8;--acc:#7A5B26}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16130F;--ink:#F1EAE0;--line:#2E2922;--acc:#D9B56C}}
+:root[data-theme="dark"]{--bg:#16130F;--ink:#F1EAE0;--line:#2E2922;--acc:#D9B56C}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,serif}
+main{max-width:720px;margin:0 auto;padding:48px 16px}
+h1{font-weight:400;font-size:clamp(30px,6vw,46px);margin:0 0 8px} p{color:var(--acc);margin:0 0 24px;line-height:1.6}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:10px}
+button{min-height:52px;padding:12px 16px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-size:16px;text-align:left;cursor:pointer}
+button:hover,button[aria-pressed="true"]{border-color:var(--acc)}
+#m{margin-top:24px;width:100%;text-align:center;background:var(--acc);color:var(--bg);border-color:var(--acc)}
+</style></head><body><main>
+<h1>Tovushlar</h1>
+<p>Har bir taklifnoma ochilganda oʻz tovushi chalinadi. Ular brauzerning oʻzida yaratiladi — alohida fayl kerak emas.</p>
+<div class="g">
+<button type="button" data-k="eshik">Xiva eshigi — taqillatish va gʻijirlash</button>
+<button type="button" data-k="boxcha">Tugun — mato shitirlashi</button>
+<button type="button" data-k="lagan">Lagan — chinni jarangi</button>
+<button type="button" data-k="oram">Oʻram — qogʻoz yoyilishi</button>
+<button type="button" data-k="quti">Quti — lenta va qopqoq</button>
+<button type="button" data-k="kitob">Kitob — qulf va sahifa</button>
+<button type="button" data-k="akril">Akril — sehrli jaranglash</button>
+<button type="button" data-k="chipta">Chipta — yirtilish</button>
+<button type="button" data-k="seal">Muhr — sindirish</button>
+<button type="button" data-k="bow">Bantik — lenta</button>
+<button type="button" data-k="heart">Yurakcha</button>
+<button type="button" data-k="sleeve">Baxmal gʻilof</button>
+<button type="button" data-k="gate">Ajur eshikchalar — brosh</button>
+<button type="button" data-k="slot">Nahor oshi — papka (kamtarona)</button>
+</div>
+<button type="button" id="m" aria-pressed="false">▶ Ichki kuy (musiqa qutisi)</button>
+</main>
+<audio id="audio" loop preload="none"></audio>
+<script>
+/* ---- Tovushlar: brauzerning oʻzida sintez qilinadi (fayl kerak emas) ---- */
+window.TaklifSFX = (function(){
+  var ctx = null, master = null, musicBus = null, noiseBuf = null, muted = false, mode = '', audioEl = null, playing = false, timer = null, nextT = 0, step = 0;
+  function ac(){
+    if (!ctx) {
+      var A = window.AudioContext || window.webkitAudioContext; if (!A) return null;
+      ctx = new A(); master = ctx.createGain(); master.gain.value = muted ? 0 : .9; master.connect(ctx.destination);
+      musicBus = ctx.createGain(); musicBus.gain.value = .55; musicBus.connect(master);
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      var d = noiseBuf.getChannelData(0); for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+    return ctx;
+  }
+  function env(g, t, a, peak, dec){ g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(peak, .0002), t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + dec); }
+  function tone(f, t, dur, type, peak, dest){ var o = ctx.createOscillator(), g = ctx.createGain(); o.type = type || 'sine'; o.frequency.setValueAtTime(f, t); env(g, t, .006, peak, dur); o.connect(g); g.connect(dest || master); o.start(t); o.stop(t + dur + .05); }
+  function bell(f, t, peak, dest){ [[1, 1], [2.76, .42], [5.4, .18], [8.93, .07]].forEach(function(p){ tone(f * p[0], t, 1.5 / p[0] + .35, 'sine', peak * p[1], dest); }); }
+  function noise(t, dur, type, f1, f2, q, peak, attack){
+    var s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+    var fl = ctx.createBiquadFilter(); fl.type = type; fl.Q.value = q; fl.frequency.setValueAtTime(f1, t); fl.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    var g = ctx.createGain(); env(g, t, attack || .01, peak, dur); s.connect(fl); fl.connect(g); g.connect(master); s.start(t, Math.random() * .5); s.stop(t + dur + .1);
+  }
+  function rnd(a, b){ return a + Math.random() * (b - a); }
+  var S = {
+    swish: function(t){ noise(t, .45, 'bandpass', 600, 3200, 1.2, .35, .08); },
+    whoosh: function(t){ noise(t, .8, 'bandpass', 300, 2400, .9, .3, .25); },
+    whooshSoft: function(t){ noise(t, 1, 'bandpass', 250, 1200, .8, .18, .3); },
+    paper: function(t){ for (var i = 0; i < 5; i++) noise(t + i * .06 + rnd(0, .03), .09, 'bandpass', rnd(2500, 5000), 2000, 2, .22); },
+    slide: function(t){ noise(t, 1.1, 'bandpass', 1800, 900, 1.5, .12, .2); for (var i = 0; i < 6; i++) noise(t + .1 + i * .15, .07, 'bandpass', 3000, 2500, 3, .08); },
+    crack: function(t){ noise(t, .06, 'highpass', 2500, 1800, .7, .6, .002); noise(t + .05, .05, 'highpass', 3000, 2000, .7, .4, .002); tone(110, t, .18, 'sine', .35); },
+    click: function(t){ noise(t, .03, 'highpass', 4000, 3000, 1, .5, .001); tone(2400, t, .06, 'square', .05); tone(1800, t + .05, .05, 'sine', .12); },
+    knock: function(t){ [0, .28].forEach(function(dd){ var o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(160, t + dd); o.frequency.exponentialRampToValueAtTime(60, t + dd + .15); env(g, t + dd, .003, .7, .18); o.connect(g); g.connect(master); o.start(t + dd); o.stop(t + dd + .3); noise(t + dd, .04, 'lowpass', 1200, 600, 1, .35, .002); }); },
+    creak: function(t){ var o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(70, t); for (var i = 1; i <= 10; i++) o.frequency.linearRampToValueAtTime(rnd(60, 150), t + i * .13);
+      var f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 6; var g = ctx.createGain(); env(g, t, .15, .12, 1.3); o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t + 1.6); },
+    rustle: function(t){ for (var i = 0; i < 9; i++) noise(t + i * .07 + rnd(0, .04), .12, 'bandpass', rnd(1200, 3000), 900, 1.5, .16); },
+    rustle2: function(t){ for (var i = 0; i < 14; i++) noise(t + i * .08 + rnd(0, .05), .14, 'bandpass', rnd(900, 2400), 700, 1.3, .13); },
+    clink: function(t){ [2093, 3136, 4186].forEach(function(f, i){ tone(f * rnd(1, 1.01), t + i * .005, .5, 'sine', .18 / (i + 1)); }); tone(1318, t + .12, .4, 'sine', .06); },
+    unroll: function(t){ noise(t, 1.4, 'bandpass', 900, 2200, 1.2, .13, .3); for (var i = 0; i < 10; i++) noise(t + i * .13, .05, 'bandpass', 3500, 3000, 4, .06); },
+    lid: function(t){ tone(90, t, .25, 'sine', .25); noise(t + .05, .8, 'bandpass', 400, 1800, .9, .18, .2); },
+    pageturn: function(t){ noise(t, .5, 'bandpass', 1500, 4000, 1.4, .22, .06); noise(t + .35, .2, 'bandpass', 4000, 2500, 2, .12, .01); },
+    rip: function(t){ var s = ctx.createBufferSource(); s.buffer = noiseBuf; var f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2200; f.Q.value = 1; var g = ctx.createGain();
+      g.gain.setValueAtTime(.0001, t); for (var i = 0; i < 22; i++) { g.gain.setValueAtTime(rnd(.05, .4), t + i * .022); g.gain.setValueAtTime(.02, t + i * .022 + .012); }
+      g.gain.exponentialRampToValueAtTime(.0001, t + .55); s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + .6); },
+    shimmer: function(t){ [1568, 1760, 2093, 2349, 2637, 3136].forEach(function(f, i){ bell(f, t + i * .07, .05); }); },
+    chimeArp: function(t){ [1047, 1319, 1568, 2093].forEach(function(f, i){ bell(f, t + i * .12, .12); }); },
+    bellSoft: function(t){ bell(523, t, .12); bell(784, t + .35, .06); }
+  };
+  var CUES = {
+    bow: [[0, 'swish'], [800, 'paper'], [1600, 'whoosh'], [1700, 'chimeArp']], bowh: [[0, 'swish'], [800, 'paper'], [1600, 'whoosh'], [1700, 'chimeArp']],
+    seal: [[0, 'crack'], [800, 'paper'], [1600, 'whoosh'], [1700, 'chimeArp']], heart: [[0, 'shimmer'], [800, 'paper'], [1600, 'whoosh'], [1700, 'chimeArp']],
+    sleeve: [[0, 'crack'], [650, 'slide'], [1600, 'chimeArp']], pocket: [[0, 'crack'], [650, 'slide'], [1600, 'chimeArp']],
+    band: [[0, 'crack'], [650, 'slide'], [1600, 'chimeArp']], gate: [[0, 'click'], [650, 'whooshSoft'], [1600, 'chimeArp']],
+    slot: [[0, 'paper'], [900, 'slide'], [2000, 'bellSoft']],
+    eshik: [[0, 'knock'], [550, 'creak'], [1900, 'chimeArp']], boxcha: [[0, 'rustle'], [450, 'rustle2'], [1900, 'chimeArp']],
+    lagan: [[0, 'clink'], [450, 'whoosh'], [1900, 'chimeArp']], oram: [[0, 'swish'], [600, 'unroll'], [1900, 'chimeArp']],
+    quti: [[0, 'swish'], [750, 'lid'], [1900, 'chimeArp']], kitob: [[0, 'click'], [550, 'pageturn'], [1900, 'chimeArp']],
+    akril: [[0, 'shimmer'], [450, 'whoosh'], [1900, 'chimeArp']], chipta: [[0, 'rip'], [1000, 'whooshSoft'], [1900, 'chimeArp']]
+  };
+  /* musiqa qutisi kuyi (oʻzimizniki): [nota (MIDI), zarb] — 0 = pauza */
+  var MEL = [[76,1],[79,1],[84,1],[79,1],[81,1],[79,1],[76,1],[74,1],[76,1],[79,1],[81,1],[84,1],[83,1],[79,1],[81,2],
+             [72,1],[76,1],[79,1],[76,1],[77,1],[76,1],[74,1],[71,1],[72,1],[76,1],[79,1],[84,1],[79,1],[76,1],[72,2]];
+  var BASS = [48, 45, 41, 43, 48, 41, 43, 48];
+  var BEAT = .62;
+  function mf(m){ return 440 * Math.pow(2, (m - 69) / 12); }
+  function tick(){
+    while (nextT < ctx.currentTime + .4) {
+      var n = MEL[step % MEL.length];
+      if (n[0]) bell(mf(n[0]), nextT, .06, musicBus);
+      var beatIdx = 0; for (var i = 0; i < step % MEL.length; i++) beatIdx += MEL[i][1];
+      if (beatIdx % 4 === 0) tone(mf(BASS[Math.floor(beatIdx / 4) % BASS.length]), nextT, 2.2, 'triangle', .05, musicBus);
+      nextT += n[1] * BEAT; step++;
+    }
+  }
+  return {
+    init: function(o){ muted = !!o.muted; mode = o.music || ''; audioEl = o.audio; if (mode && mode !== 'kuy' && audioEl) audioEl.src = mode; },
+    cues: function(key){ if (muted) return; var c = ac(); if (!c) return; var t0 = c.currentTime + .03; (CUES[key] || []).forEach(function(q){ if (S[q[1]]) S[q[1]](t0 + q[0] / 1000); }); },
+    music: function(on){
+      if (!mode) return;
+      if (mode !== 'kuy') { if (!audioEl) return; audioEl.muted = muted; if (on) { var p = audioEl.play(); if (p && p.catch) p.catch(function(){}); } else audioEl.pause(); playing = on; return; }
+      var c = ac(); if (!c) return;
+      if (on && !playing) { playing = true; nextT = c.currentTime + 2.6; step = 0; timer = setInterval(tick, 120); }
+      if (!on && playing) { playing = false; clearInterval(timer); }
+    },
+    toggle: function(){ muted = !muted; if (master) master.gain.setTargetAtTime(muted ? 0 : .9, ctx.currentTime, .05); if (audioEl) audioEl.muted = muted; if (!muted) this.music(true); return !muted; },
+    isOn: function(){ return !muted; }
+  };
+})();
+</script>
+
+<script>
+const S = window.TaklifSFX; S.init({ muted:false, music:'kuy', audio:document.getElementById('audio') });
+document.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => S.cues(b.dataset.k)));
+const m = document.getElementById('m'); let on = false;
+m.addEventListener('click', () => { on = !on; S.music(on); m.setAttribute('aria-pressed', on); m.textContent = on ? '■ Kuyni toʻxtatish' : '▶ Ichki kuy (musiqa qutisi)'; });
+</script>
+</body></html>
